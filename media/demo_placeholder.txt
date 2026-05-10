@@ -1,0 +1,3 @@
+Demo images or videos can be placed here.
+
+Large videos are intentionally excluded from the GitHub release package.
