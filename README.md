@@ -1,157 +1,116 @@
 # FlexGesture
 
-FlexGesture：基于 FPC 柔性贴片的可穿戴手势控制器。
+**FlexGesture：基于 ESP32 + LSM6DSOTR 的柔性贴片手势控制器**
 
-## 项目简介
+FlexGesture 是一个面向 FPC / 柔性贴片场景的可穿戴手势控制器。新版硬件使用 ESP32-WROOM-32E-N8 和 LSM6DSOTR 六轴姿态传感器，通过 I2C 读取姿态数据；当前目标是完成 USB 串口调试链路，后续扩展为 BLE HID 蓝牙手势控制器，用于 PPT 翻页、网页控制等场景。
 
-FlexGesture 是一个面向可穿戴交互的手势控制器项目。目标硬件形态是基于
-STM32F103C8T6、LSM6DSO 和 FPC 柔性电路板的一体化手背贴片，通过本地姿态
-识别输出 `Gesture` 指令，再由电脑端 Python 程序转换为键盘控制，用于 PPT、
-网页或其他桌面应用控制。
+## Current Status
 
-当前 V0.4-PC-Control-Demo 版本已经完成 MPU6050 面包板验证和 PPT 控制链路：
-STM32 通过 I2C 读取 IMU 数据，识别 `RIGHT`、`LEFT`、`UP`，通过 USART1 输出
-`Gesture: ...`，电脑端 Python 脚本读取串口并模拟键盘按键。
+- **V1 STM32/FPC 版本**：机械结构失败。第一块 FPC 最初完成 STM32 + LSM6DSO bring-up，但插针直接焊在 FPC 软板上，弯折后焊点和焊盘长期受力，导致信号传输极不稳定，后续焊点/焊盘脱落；第二块备用 FPC 板无信号输出。结论是第一版主要失败在机械连接和受力设计，不代表 LSM6DSO 方案本身不可行。
+- **V2 ESP32 版本**：重新设计主控、电源、充电、蓝牙和姿态传感器连接。PCB design completed / ready for bring-up，硬件 bring-up 待进行。
 
-## 项目特点
+## Highlights
 
-- FPC 柔性结构，适合手背贴片式佩戴。
-- 主控刚性岛 + BEND ZONE + 传感器岛的硬件结构。
-- LSM6DSO 六轴姿态检测目标方案。
-- STM32 本地手势识别，电脑端无需做复杂算法。
-- 串口输出 `Gesture` 指令，易于调试和扩展。
-- Python 上位机可控制 PPT / 网页 / 桌面应用。
+- ESP32-WROOM-32E-N8 主控，后续可直接使用 ESP32 BLE。
+- LSM6DSOTR 六轴 IMU，I2C 接口。
+- Type-C 供电和串口烧录。
+- CH340C USB-UART。
+- 自动下载电路，保留 BOOT / RESET 手动按键。
+- TP4055 单节 3.7V 锂电池充电，PROG 电阻为 10kΩ。
+- TPS63031DSKR 3.3V 升降压供电，搭配 1.5uH 电感。
+- USB / BAT 自动电源切换。
+- 完善测试点，方便 bring-up 和故障定位。
+- 根据 V1 FPC 失败经验，强调连接器、补强和机械受力设计。
 
-## 系统结构
-
-```text
-手背传感器岛 -> BEND ZONE -> STM32 主控岛 -> UART -> PC Python -> PPT/网页控制
-```
-
-## 硬件组成
-
-- STM32F103C8T6
-- LSM6DSO
-- Type-C 5V 输入
-- AMS1117-3.3
-- SWD 下载接口
-- BOOT0 / NRST
-- USART1 串口接口
-- FPC 柔性电路板
-
-## 引脚说明
-
-| 功能 | STM32 引脚 |
-| --- | --- |
-| LSM6DSO SCL | PB6 |
-| LSM6DSO SDA | PB7 |
-| LSM6DSO INT1 | PB0 |
-| LSM6DSO INT2 | PB1，可选 |
-| USART1_TX | PA9 |
-| USART1_RX | PA10 |
-| SWDIO | PA13 |
-| SWCLK | PA14 |
-
-当前面包板验证版本使用 MPU6050：
-
-| MPU6050 | STM32F103C8T6 |
-| --- | --- |
-| VCC | 3V3 |
-| GND | GND |
-| SCL | PB6 / I2C1_SCL |
-| SDA | PB7 / I2C1_SDA |
-| INT | 暂不连接 |
-
-USB-TTL 连接：
-
-| STM32 | USB-TTL |
-| --- | --- |
-| PA9 / USART1_TX | RX |
-| PA10 / USART1_RX | TX |
-| GND | GND |
-
-串口波特率：`115200`。
-
-## 软件说明
-
-### STM32 固件
-
-固件位于 `firmware/stm32/`。当前固件基于 STM32CubeIDE，主要功能：
-
-- I2C1 读取 IMU 数据。
-- 姿态状态机识别手势。
-- USART1 输出启动信息和有效手势。
-- 当前稳定识别 `RIGHT`、`LEFT`、`UP`。
-- `DOWN` 暂时关闭，因为 `FLAT` 姿态用于中立复位。
-
-### Python 上位机
-
-电脑端脚本位于 `tools/pc_gesture_controller.py`，依赖：
-
-- `pyserial`
-- `pyautogui`
-
-手势按键映射：
-
-| 串口输出 | 键盘动作 |
-| --- | --- |
-| `Gesture: RIGHT` | `Right`，PPT 下一页 |
-| `Gesture: LEFT` | `Left`，PPT 上一页 |
-| `Gesture: UP` | `Enter` |
-| `Gesture: DOWN` | `Esc` |
-
-## 当前进度
-
-- MPU6050 面包板验证完成。
-- PPT 控制链路完成。
-- LSM6DSO + STM32 一体化 FPC 设计完成。
-- DRC 通过。
-- FPC 打样和焊接测试待进行。
-
-## 使用方法
-
-1. 使用 ST-Link 下载 STM32 程序。
-2. 使用 Type-C 或 3.3V/5V 方案给硬件供电，按实际板卡电源设计连接。
-3. 连接 USB-TTL 或板载串口到电脑。
-4. 确认串口波特率为 `115200`。
-5. 关闭串口助手，避免 COM 口被占用。
-6. 打开 PPT 放映或网页，并点击目标窗口让它成为当前活动窗口。
-7. 安装并运行电脑端控制脚本：
-
-```bat
-py -m pip install -r tools\requirements.txt
-py tools\pc_gesture_controller.py --port COM5
-```
-
-也可以运行：
-
-```bat
-tools\run_pc_controller_windows.bat
-```
-
-如果未指定 `--port`，脚本会列出当前可用串口并提示输入。
-
-## 注意事项
-
-- BEND ZONE 不建议大面积铺铜，避免影响弯折寿命。
-- 主控岛和传感器岛建议做补强。
-- Type-C 区域建议补强，降低插拔应力。
-- LSM6DSO 是 LGA 封装，建议 SMT 或加热台低温锡膏焊接。
-- 上电前检查 `3V3` 和 `GND` 是否短路。
-- 串口助手和 Python 脚本不能同时占用同一个 COM 口。
-- 如果 Python 提示 COM 口被占用，请关闭串口助手或其他串口程序后重试。
-
-## 目录结构
+## System Overview
 
 ```text
-FlexGesture/
-├── docs/          项目说明文档
-├── firmware/      STM32 固件工程
-├── hardware/      原理图、PCB、Gerber、BOM
-├── media/         演示图片或视频占位
-└── tools/         Python 上位机控制脚本
+Hand motion
+  -> LSM6DSOTR IMU
+  -> ESP32-WROOM-32E-N8
+  -> USB serial debug / future BLE HID
+  -> PC / PPT / browser control
 ```
+
+## Hardware Connections
+
+| Function | Connection |
+| --- | --- |
+| LSM6DSOTR SDA | ESP32 IO21 |
+| LSM6DSOTR SCL | ESP32 IO22 |
+| LSM6DSOTR INT1 | ESP32 IO27 |
+| LSM6DSOTR INT2 | ESP32 IO26 |
+| CH340C TXD | ESP32 RXD0 |
+| CH340C RXD | ESP32 TXD0 |
+| BOOT button | ESP32 IO0 |
+| RESET button | ESP32 EN |
+| TPS63031 EN | PWR_EN |
+| Battery | BAT / GND |
+
+LSM6DSOTR uses I2C mode. SDA/SCL each have 4.7kΩ pull-ups to 3V3. CS is tied to 3V3. SDO/SA0 is tied to GND, so the expected I2C address is `0x6A`. SDX/SCX, SDO_AUX and OCS_AUX are not used and remain NC.
+
+## Power Architecture
+
+```text
+Type-C VIN_5V -> TP4055 -> BAT
+Type-C VIN_5V -> B5819W -> SYS_IN
+BAT           -> AO3401A -> SYS_IN
+SYS_IN        -> TPS63031 -> 3V3
+3V3           -> ESP32 / CH340C / LSM6DSOTR
+```
+
+Power design notes:
+
+- Type-C provides `VIN_5V`.
+- TP4055 charges a single-cell 3.7V Li-ion pouch battery, charge limit 4.2V.
+- Battery target: 3.7V, about 1.11Wh / 300mAh, around 20mm x 30mm.
+- TP4055 PROG resistor is 10kΩ for a small pouch cell.
+- TPS63031DSKR generates the 3V3 rail from `SYS_IN`.
+- USB/BAT power-path switching uses VIN_5V through B5819W to `SYS_IN`, and BAT through AO3401A P-MOS to `SYS_IN`.
+
+## Debug Test Points
+
+The V2 board includes test points for:
+
+- VIN_5V
+- SYS_IN
+- 3V3
+- BAT
+- GND
+- TXD0
+- RXD0
+- I2C_SDA
+- I2C_SCL
+- EN
+- IO0
+- PWR_EN
+
+## Firmware Plan
+
+- I2C scanner.
+- LSM6DSOTR `WHO_AM_I` read.
+- Serial output for raw IMU data.
+- Gesture recognition: LEFT / RIGHT / UP / DOWN / TAP / SHAKE.
+- BLE HID Keyboard for PPT page control.
+- Low-power optimization.
+
+## Manufacturing Notes
+
+- ESP32 antenna area must keep out copper, traces and vias.
+- USB D+ / D- should be short, parallel and use as few vias as possible.
+- TPS63031 inductor and input/output capacitors must be placed close to the IC.
+- Q3 AO3401A G/S/D package mapping must be manually checked before ordering.
+- SW3 MSK12C02 common terminal must be manually checked.
+- C12 is DNP and should not be assembled by default.
+- BAT+ / BAT- silkscreen must be checked before battery connection.
+- FPC versions need PI/FR4 stiffeners around ESP32, LSM6DSOTR, Type-C, battery pads, switches and power area.
+
+## Repository Notes
+
+- `FlexGesture/` contains the legacy STM32CubeIDE firmware project and bring-up history.
+- `docs/` contains V2 ESP32 hardware notes and bring-up checklist.
+- `hardware/`, `production/` and `firmware/` are prepared for hardware design files, production outputs and future ESP32 firmware.
 
 ## License
 
-This project is released under the MIT License. See `LICENSE` for details.
+MIT License. See `LICENSE` if present.
